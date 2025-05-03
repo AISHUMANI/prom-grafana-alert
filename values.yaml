@@ -508,6 +508,13 @@ alertmanager:
   config:
     global:
       resolve_timeout: 5m
+      # SMTP Configuration
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_from: 'muthulak05hmi@gmail.com'
+      smtp_auth_username: 'muthulak05hmi@gmail.com'
+      smtp_auth_password: 'eljl nmoo thge wpmo'  # Gmail App Password
+      smtp_require_tls: true
+
     inhibit_rules:
       - source_matchers:
           - 'severity = critical'
@@ -531,20 +538,55 @@ alertmanager:
           - 'namespace'
       - target_matchers:
           - 'alertname = InfoInhibitor'
+
+
+    # Updated route configuration
     route:
       group_by: ['namespace']
       group_wait: 30s
       group_interval: 5m
       repeat_interval: 12h
-      receiver: 'null'
+      receiver: 'email-team'  # Changed from 'null' to your email receiver
       routes:
-      - receiver: 'null'
-        matchers:
-          - alertname = "Watchdog"
+        - receiver: 'email-team'
+          matchers:
+            - alertname != "Watchdog"
+        - receiver: 'null'  # Keep the Watchdog route
+          matchers:
+            - alertname = "Watchdog"
+
+    # Updated receivers configuration
     receivers:
-    - name: 'null'
+      - name: 'null'  # Keep the null receiver
+      - name: 'email-team'
+        email_configs:
+          - to: 'muthuscahs4021@gmail.com'
+            send_resolved: true
+            headers:
+              subject: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }} ({{ .CommonLabels.severity }})'
+            html: |
+              <h2>{{ .CommonAnnotations.summary }}</h2>
+              <p><strong>Status:</strong> {{ .Status | toUpper }}</p>
+              <p><strong>Severity:</strong> {{ .CommonLabels.severity }}</p>
+              <p><strong>Description:</strong> {{ .CommonAnnotations.description }}</p>
+              {{ if .CommonAnnotations.runbook_url }}
+              <p><strong>Runbook:</strong> <a href="{{ .CommonAnnotations.runbook_url }}">Link</a></p>
+              {{ end }}
+              <hr>
+              <h3>Details:</h3>
+              <ul>
+                {{ range .Alerts }}
+                <li>
+                  <strong>Alert:</strong> {{ .Labels.alertname }}<br>
+                  <strong>Namespace:</strong> {{ .Labels.namespace }}<br>
+                  <strong>Timestamp:</strong> {{ .StartsAt }}<br>
+                  {{ if .GeneratorURL }}<a href="{{ .GeneratorURL }}">Source</a>{{ end }}
+                </li>
+                {{ end }}
+              </ul>
+
     templates:
-    - '/etc/alertmanager/config/*.tmpl'
+      - '/etc/alertmanager/config/*.tmpl'
 
   ## Alertmanager configuration directives (as string type, preferred over the config hash map)
   ## stringConfig will be used only, if tplConfig is true
@@ -1228,7 +1270,7 @@ grafana:
 
   ## Deploy default dashboards
   ##
-  defaultDashboardsEnabled: true
+  defaultDashboardsEnabled: false
 
   ## Timezone for the default dashboards
   ## Other options are: browser or a specific timezone, i.e. Europe/Luxembourg
@@ -5306,7 +5348,20 @@ cleanPrometheusOperatorObjectNames: false
 ## Extra manifests to deploy.  Can be of type dict or list.
 ## If dict, keys are ignored and only values are used.
 ## Items contained within extraObjects can be defined as dict or string and are passed through tpl.
-extraManifests: null
+# values.yaml
+extraManifests:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: grafana-kubernetes-dashboard
+      namespace: monitoring
+      labels:
+        grafana_dashboard: "1"
+    data:
+      kubernetes-cluster.json: |-
+        {{ .Files.Get "dashboards/kubernetes-cluster.json" | indent 8 }}
+
+
   # - apiVersion: v1
   #   kind: ConfigMap
   #   metadata:
